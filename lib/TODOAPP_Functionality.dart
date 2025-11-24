@@ -10,24 +10,52 @@ class TODOAPP_Functionality extends StatefulWidget {
 class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
   List<Map<String, dynamic>> tasks = [];
   bool showActiveTask = true;
+  late BuildContext _context;  // Store the build context for snackbars
 
   void _addTask(String task) {
     setState(() {
       tasks.add({
-        'id': UniqueKey(),  // Add unique ID for each task
+        'id': UniqueKey(),
         'task': task,
-        'completed': false
+        'completed': false,
       });
-      Navigator.pop(context);
+      ScaffoldMessenger.of(_context).showSnackBar(
+        SnackBar(content: Text('Task added!')),
+      );
+      Navigator.pop(_context);
     });
   }
 
-  void _showTaskDialogue(int? index) {
+  void _editTask(String newTask, Key taskId) {  // Changed from String to Key
+    print('Editing task with id: $taskId');  // Debug print
+    print('New task: $newTask');  // Debug print
+    final taskIndex = tasks.indexWhere((t) => t['id'] == taskId);
+    print('Task index: $taskIndex');  // Debug print
+    if (taskIndex != -1) {
+      print('Old task: ${tasks[taskIndex]['task']}');
+      setState(() {
+        tasks[taskIndex]['task'] = newTask;
+      });// Debug print
+
+      print('New task set: ${tasks[taskIndex]['task']}');  // Debug print
+      ScaffoldMessenger.of(_context).showSnackBar(
+        SnackBar(content: Text('Task updated!')),
+      );
+    } else {
+      print('Task not found!');  // Debug print
+    }
+    // Removed Navigator.pop from here; handled in onPressed
+  }
+
+  void _showTaskDialogue(int? index, {Map<String, dynamic>? existingTask}) {
     TextEditingController _taskEditingController = TextEditingController();
+    if (existingTask != null) {
+      _taskEditingController.text = existingTask['task'];
+    }
     showDialog(
-      context: context,
+      context: _context,  // Use stored context
       builder: (context) => AlertDialog(
-        title: Text('Add Task'),
+        title: Text(existingTask == null ? 'Add Task' : 'Edit Task'),
         content: TextField(
           controller: _taskEditingController,
           decoration: InputDecoration(hintText: 'Enter Task'),
@@ -42,8 +70,18 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(shape: StadiumBorder()),
             onPressed: () {
-              if (_taskEditingController.text.trim().isNotEmpty) {
-                _addTask(_taskEditingController.text);
+              String trimmedText = _taskEditingController.text.trim();
+              if (trimmedText.isNotEmpty) {
+                if (existingTask == null) {
+                  _addTask(trimmedText);
+                } else {
+                  _editTask(trimmedText, existingTask['id']);  // Now passes Key
+                  Navigator.pop(context);  // Pop dialog after edit
+                }
+              } else {
+                ScaffoldMessenger.of(_context).showSnackBar(
+                  SnackBar(content: Text('Task cannot be empty')),
+                );
               }
             },
             child: Text('Save'),
@@ -54,9 +92,9 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
   }
 
   void deleteTask(int index) {
-  setState(() {
-    tasks.removeAt(index);
-  });
+    setState(() {
+      tasks.removeAt(index);
+    });
   }
 
   int get activeCount => tasks.where((task) => !task['completed']).length;
@@ -64,6 +102,7 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
 
   @override
   Widget build(BuildContext context) {
+    _context = context;  // Store the build context
     List<Map<String, dynamic>> filteredTasks =
     tasks.where((task) => task['completed'] != showActiveTask).toList();
     return Scaffold(
@@ -162,9 +201,9 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
             child: ListView.builder(
               itemCount: filteredTasks.length,
               itemBuilder: (context, index) {
-                final task = filteredTasks[index];  // Get the task map
+                final task = filteredTasks[index];
                 return Dismissible(
-                  key: ValueKey(task['id']),  // Stable key tied to task ID
+                  key: ValueKey(task['id']),
                   background: Container(
                     color: Colors.green,
                     child: Icon(
@@ -181,7 +220,6 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
                   ),
                   onDismissed: (direction) {
                     if (direction == DismissDirection.startToEnd) {
-                      // Toggle completion
                       setState(() {
                         final taskIndex = tasks.indexWhere((t) => t['id'] == task['id']);
                         if (taskIndex != -1) {
@@ -189,7 +227,6 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
                         }
                       });
                     } else if (direction == DismissDirection.endToStart) {
-                      // Delete task
                       setState(() {
                         tasks.removeWhere((t) => t['id'] == task['id']);
                       });
@@ -197,7 +234,30 @@ class _TODOAPP_FunctionalityState extends State<TODOAPP_Functionality> {
                   },
                   child: Card(
                     child: ListTile(
-                      title: Text(task['task']),
+                      title: Text(
+                        task['task'],
+                        style: TextStyle(
+                          fontSize: 16,
+                          decoration: task['completed'] ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      leading: Checkbox(
+                        shape: CircleBorder(),
+                        value: task['completed'],
+                        onChanged: (value) {
+                          setState(() {
+                            final taskIndex = tasks.indexWhere((t) => t['id'] == task['id']);
+                            if (taskIndex != -1) {
+                              tasks[taskIndex]['completed'] = value ?? false;
+                            }
+                          });
+                        },
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(Icons.edit, size: 20),
+                        onPressed: () => _showTaskDialogue(null, existingTask: task),
+                      ),
+                      onLongPress: () => _showTaskDialogue(null, existingTask: task),
                     ),
                   ),
                 );
